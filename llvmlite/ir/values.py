@@ -437,6 +437,20 @@ class _Undefined(object):
 Undefined = _Undefined()
 
 
+class _Poison(object):
+    """
+    'poison': a value for poison values.
+    """
+    def __new__(cls):
+        try:
+            return Poison
+        except NameError:
+            return object.__new__(_Poison)
+
+
+Poison = _Poison()
+
+
 class Constant(_StrCaching, _StringReferenceCaching, _ConstOpMixin, Value):
     """
     A constant LLVM value.
@@ -458,6 +472,9 @@ class Constant(_StrCaching, _StringReferenceCaching, _ConstOpMixin, Value):
 
         elif self.constant is Undefined:
             val = "undef"
+
+        elif self.constant is Poison:
+            val = "poison"
 
         elif isinstance(self.constant, bytearray):
             val = 'c"{0}"'.format(_escape_string(self.constant))
