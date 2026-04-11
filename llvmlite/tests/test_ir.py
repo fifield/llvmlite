@@ -1805,6 +1805,16 @@ insert_block:
                 %"shuf" = shufflevector <2 x i32> %"vec2", <2 x i32> %"vec2", <2 x i32> <i32 1, i32 0>
             """)  # noqa E501
 
+        poison_vec = ir.Constant(vecty, ir.Poison)
+        poison_mask = ir.Constant(vecty, [1, ir.Poison])
+        builder.shuffle_vector(vec, poison_vec, poison_mask, name='poison_shuf')
+
+        self.check_block(block, """\
+            shuffle_block:
+                %"shuf" = shufflevector <2 x i32> %"vec2", <2 x i32> %"vec2", <2 x i32> <i32 1, i32 0>
+                %"poison_shuf" = shufflevector <2 x i32> %"vec2", <2 x i32> <i32 poison, i32 poison>, <2 x i32> <i32 1, i32 poison>
+            """)  # noqa E501
+
         block = builder.append_basic_block("add_block")
         builder.branch(block)
         builder.position_at_end(block)
@@ -2803,6 +2813,8 @@ class TestConstant(TestBase):
         self.assertEqual(str(c), 'i1 false')
         c = ir.Constant(int1, ir.Undefined)
         self.assertEqual(str(c), 'i1 undef')
+        c = ir.Constant(int1, ir.Poison)
+        self.assertEqual(str(c), 'i1 poison')
         c = ir.Constant(int1, None)
         self.assertEqual(str(c), 'i1 0')
 
@@ -2857,6 +2869,21 @@ class TestConstant(TestBase):
         vec_repr = "<8 x i32> <{}>".format(
             ', '.join(map('i32 {}'.format, vals)))
         self.assertEqual(str(vec), vec_repr)
+
+        poison_vec = ir.Constant(vecty, [1, ir.Poison, 4, ir.Poison,
+                                         8, ir.Poison, 9, ir.Poison])
+        self.assertEqual(
+            str(poison_vec),
+            '<8 x i32> <i32 1, i32 poison, i32 4, i32 poison, i32 8, '
+            'i32 poison, i32 9, i32 poison>'
+        )
+
+        splat_poison = ir.Constant(vecty, ir.Poison)
+        self.assertEqual(
+            str(splat_poison),
+            '<8 x i32> <i32 poison, i32 poison, i32 poison, i32 poison, '
+            'i32 poison, i32 poison, i32 poison, i32 poison>'
+        )
 
     def test_non_nullable_int(self):
         constant = ir.Constant(ir.IntType(32), None).constant
@@ -3188,6 +3215,12 @@ class TestSingleton(TestBase):
         self.assertIs(ir.Undefined, copy.copy(ir.Undefined))
         self.assertIs(ir.Undefined, copy.deepcopy(ir.Undefined))
         self.assert_pickle_correctly(ir.Undefined)
+
+    def test_poison(self):
+        self.assertIs(ir.Poison, ir.values._Poison())
+        self.assertIs(ir.Poison, copy.copy(ir.Poison))
+        self.assertIs(ir.Poison, copy.deepcopy(ir.Poison))
+        self.assert_pickle_correctly(ir.Poison)
 
 
 if __name__ == '__main__':

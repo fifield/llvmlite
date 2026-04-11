@@ -5,7 +5,7 @@ Implementation of LLVM IR instructions.
 from llvmlite.ir import types
 from llvmlite.ir.values import (Block, Function, Value, NamedValue, Constant,
                                 MetaDataArgument, MetaDataString, AttributeSet,
-                                Undefined, ArgumentAttributes)
+                                Undefined, Poison, ArgumentAttributes)
 from llvmlite.ir._utils import _HasMetadata
 
 
@@ -674,7 +674,10 @@ class ShuffleVector(Instruction):
         index_range = range(vector1.type.count
                             if vector2 == Undefined
                             else 2 * vector1.type.count)
-        if not all(ii.constant in index_range for ii in mask.constant):
+        if not all(ii.constant in index_range or
+                   ii.constant is Undefined or
+                   ii.constant is Poison
+                   for ii in mask.constant):
             raise IndexError(
                 "mask values need to be in {0}".format(index_range),
             )
