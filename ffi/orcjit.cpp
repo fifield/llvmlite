@@ -2,6 +2,8 @@
 #include "llvm-c/LLJIT.h"
 #include "llvm-c/Orc.h"
 #include <sstream>
+#include <type_traits>
+#include <utility>
 
 #include "llvm/AsmParser/Parser.h"
 #include "llvm/ExecutionEngine/Orc/Core.h"
@@ -52,6 +54,51 @@ typedef struct {
     char *name;
     uint64_t address;
 } SymbolAddress;
+
+/* LLVM removed the `const Triple &` parameter from
+ * LLJITBuilderState::ObjectLinkingLayerCreator in llvm-project commit
+ * b18e5b6a3639 ("[ORC] Remove the Triple argument from
+ * LLJITBuilder::ObjectLinkingLayerCreator"), i.e. the creator went from
+ *
+ *   Expected<std::unique_ptr<ObjectLayer>>(ExecutionSession &, const Triple &)
+ * to
+ *   Expected<std::unique_ptr<ObjectLayer>>(ExecutionSession &)
+ *
+ * That landed during the LLVM 21 development cycle, so LLVM_VERSION_MAJOR
+ * reports 21 both before and after the change and cannot discriminate between
+ * the two signatures. Detect the shape of the callable directly instead.
+ *
+ * `body` is always invoked as `body(ExecutionSession &, const Triple &)`. On
+ * the one-argument API the triple is obtained from the ExecutionSession, which
+ * is how LLVM migrated its own in-tree callers (see the OrcV2CBindings.cpp and
+ * lli hunks of the commit above). `ExecutionSession::getTargetTriple()` exists
+ * on both sides of the change.
+ *
+ * The dispatch must live in a template. In a non-template context both arms of
+ * an `if constexpr` still have to be well-formed, and only one of the two
+ * `setObjectLinkingLayerCreator()` calls below is well-formed for any given
+ * LLVM. Because `BuilderT` is a template parameter, both calls are dependent
+ * and the discarded arm is never instantiated.
+ */
+template <typename BuilderT, typename BodyT>
+static void setObjectLinkingLayerCreatorCompat(BuilderT &builder, BodyT body) {
+    using Creator = llvm::orc::LLJITBuilderState::ObjectLinkingLayerCreator;
+    if constexpr (std::is_invocable_v<Creator, llvm::orc::ExecutionSession &>) {
+        /* New (one-argument) API. */
+        builder.setObjectLinkingLayerCreator(
+            [body = std::move(body)](llvm::orc::ExecutionSession &session) {
+                return body(session, session.getTargetTriple());
+            });
+    } else {
+        /* Old (two-argument) API. */
+        builder.setObjectLinkingLayerCreator(
+            [body = std::move(body)](llvm::orc::ExecutionSession &session,
+                                     const llvm::Triple &triple) {
+                return body(session, triple);
+            });
+    }
+}
+
 extern "C" {
 
 API_EXPORT(std::shared_ptr<LLJIT> *)
@@ -82,7 +129,8 @@ LLVMPY_CreateLLJITCompiler(LLVMTargetMachineRef tm, bool suppressErrors,
                 .setFeatures(template_tm->getTargetFeatureString())
                 .setOptions(template_tm->Options));
     }
-    builder.setObjectLinkingLayerCreator(
+    setObjectLinkingLayerCreatorCompat(
+        builder,
         [=](llvm::orc::ExecutionSession &session, const llvm::Triple &triple)
             -> std::unique_ptr<llvm::orc::ObjectLayer> {
             if (useJitLink) {
