@@ -622,6 +622,21 @@ LLVMPY_module_AddModuleDebugInfoPrinterPass(LLVMModulePassManagerRef MPM) {
     llvm::unwrap(MPM)->addPass(ModuleDebugInfoPrinterPass(llvm::outs()));
 }
 
+// LintPass dropped its default constructor and now requires `AbortOnError`,
+// which FUNCTION_PASS(NAME) cannot express (it expands to NAME()). false
+// matches LLVM's own "lint" registration; "lint<strict>" is the true variant
+// and is not exposed here.
+API_EXPORT(void)
+LLVMPY_module_AddLintPass(LLVMModulePassManagerRef MPM) {
+    llvm::unwrap(MPM)->addPass(
+        createModuleToFunctionPassAdaptor(LintPass(false)));
+}
+
+API_EXPORT(void)
+LLVMPY_function_AddLintPass(LLVMFunctionPassManagerRef FPM) {
+    llvm::unwrap(FPM)->addPass(LintPass(false));
+}
+
 #define CGSCC_PASS(NAME)                                                       \
     API_EXPORT(void) LLVMPY_module_Add##NAME(LLVMModulePassManagerRef MPM) {   \
         llvm::unwrap(MPM)->addPass(                                            \

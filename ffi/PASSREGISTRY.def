@@ -41,7 +41,9 @@ FUNCTION_PASS(DomViewer)
 FUNCTION_PASS(DomOnlyViewer)
 FUNCTION_PASS(PostDomViewer)
 FUNCTION_PASS(PostDomOnlyViewer)
-FUNCTION_PASS(LintPass)
+// LintPass is hand-written in newpassmanagers.cpp: it lost its default
+// constructor and now takes `bool AbortOnError`, which FUNCTION_PASS(NAME)
+// cannot express (it expands to NAME()).
 FUNCTION_PASS(ADCEPass)
 FUNCTION_PASS(BreakCriticalEdgesPass)
 FUNCTION_PASS(DSEPass)
