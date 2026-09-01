@@ -106,7 +106,13 @@
 #include "llvm/Transforms/Instrumentation/DataFlowSanitizer.h"
 #include "llvm/Transforms/Instrumentation/GCOVProfiler.h"
 #include "llvm/Transforms/Instrumentation/HWAddressSanitizer.h"
+// The InstrOrderFile pass was removed from LLVM; nothing here references
+// InstrOrderFilePass (its PASSREGISTRY.def entry sits in the commented-out
+// "TODO: Add them if needed" block), so the include is only kept for the
+// LLVM versions that still ship the header.
+#if __has_include("llvm/Transforms/Instrumentation/InstrOrderFile.h")
 #include "llvm/Transforms/Instrumentation/InstrOrderFile.h"
+#endif
 #include "llvm/Transforms/Instrumentation/InstrProfiling.h"
 #include "llvm/Transforms/Instrumentation/MemProfiler.h"
 #include "llvm/Transforms/Instrumentation/MemorySanitizer.h"
